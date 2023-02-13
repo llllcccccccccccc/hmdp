@@ -20,12 +20,14 @@ import static com.hmdp.utils.RedisConstants.LOGIN_USER_TTL;
 /**
  * 不过滤的刷新token有效期，使用户访问不需要登录的网页，token也不会过期
  */
-@Component
+
 public class RefreshTokenInterceptor implements HandlerInterceptor {
-
-
-    @Autowired
     private StringRedisTemplate stringRedisTemplate;
+
+    public RefreshTokenInterceptor(StringRedisTemplate stringRedisTemplate) {
+        this.stringRedisTemplate=stringRedisTemplate;
+    }
+
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -50,7 +52,6 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         //8.放行
         return true;
     }
-
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
