@@ -35,11 +35,4 @@ public class RedisIdWorker {
         return timestamp << CONUT_BITS | count;
     }
 
-    public static void main(String[] args) {
-        long a = 111;
-
-        System.out.println(a << 32);
-    }
-
-
 }

@@ -14,9 +14,11 @@ import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.service.IVoucherService;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Autowired
     private ISeckillVoucherService seckillVoucherService;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     @Autowired
     private RedisIdWorker redisIdWorker;
@@ -55,7 +59,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
      * @return
      */
     @Override
-
     public Result seckillVoucher(Long voucherId) {
 
         //1.查询优惠券
@@ -77,45 +80,57 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         //得到用户id
         Long userId = UserHolder.getUser().getId();
-
-        synchronized (userId.toString().intern()){
-            //获取代理对象（事务）
-            IVoucherService proxy = (IVoucherService)AopContext.currentProxy();
+        //创建锁对象
+        SimpleRedisLock lock = new SimpleRedisLock("order:userId", stringRedisTemplate);
+        //获取锁
+        boolean isLock = lock.tryLock(1200);
+        if (!isLock) {
+        //获取锁失败，返回错误信息或重试
+            return Result.fail("不允许重复下单");
+        }
+        //获取代理对象（事务）
+        try {
+            IVoucherService proxy = (IVoucherService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        } catch (IllegalStateException e) {
+          throw new RuntimeException(e);
+        }finally {
+            //
+            lock.unlock();
         }
     }
+
     @Transactional
-    public  Result createVoucherOrder(Long voucherId) {
+    public Result createVoucherOrder(Long voucherId) {
         //一人只能买一次
         Long userId = UserHolder.getUser().getId();
 
 
-            int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
-            if (count > 0) {
-                //用户已经购买过
-                return Result.fail("请勿重复购买");
-            }
-            //5.扣减库存
-            boolean success = seckillVoucherService.update(new LambdaUpdateWrapper<SeckillVoucher>()
-                    .eq(SeckillVoucher::getVoucherId, voucherId)
-                    .gt(SeckillVoucher::getStock, 0).setSql("stock = stock - 1"));
-            if (!success) {
-                //扣减失败
-                return Result.fail("库存不足");
-            }
-            //6.创建订单
-            VoucherOrder voucherOrder = new VoucherOrder();
-            //6.1订单id
-            long orderId = redisIdWorker.nextId("order");
-            voucherOrder.setId(orderId);
-            //6.2用户Id
-
-            voucherOrder.setUserId(userId);
-            //6.3代金券Id
-            voucherOrder.setVoucherId(voucherId);
-            save(voucherOrder);
-            //7.返回订单Id
-            return Result.ok(orderId);
+        int count = query().eq("user_id", userId).eq("voucher_id", voucherId).count();
+        if (count > 0) {
+            //用户已经购买过
+            return Result.fail("请勿重复购买");
+        }
+        //5.扣减库存
+        boolean success = seckillVoucherService.update(new LambdaUpdateWrapper<SeckillVoucher>()
+                .eq(SeckillVoucher::getVoucherId, voucherId)
+                .gt(SeckillVoucher::getStock, 0).setSql("stock = stock - 1"));
+        if (!success) {
+            //扣减失败
+            return Result.fail("库存不足");
+        }
+        //6.创建订单
+        VoucherOrder voucherOrder = new VoucherOrder();
+        //6.1订单id
+        long orderId = redisIdWorker.nextId("order");
+        voucherOrder.setId(orderId);
+        //6.2用户Id
+        voucherOrder.setUserId(userId);
+        //6.3代金券Id
+        voucherOrder.setVoucherId(voucherId);
+        save(voucherOrder);
+        //7.返回订单Id
+        return Result.ok(orderId);
 
     }
 }
