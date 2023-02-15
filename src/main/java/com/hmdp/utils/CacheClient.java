@@ -104,14 +104,15 @@ public class CacheClient {
         //1.从redis查询商铺缓存
         String key = keyPrefix + id;
         String json = stringRedisTemplate.opsForValue().get(key);
-        //2.判断是否存在
-        if (StrUtil.isBlank(json)) {
-            //3.存在，直接返回
-            return null;
-        }
-        //4.命中，需要先把json反序列化为对象
+
         RedisData redisData = JSONUtil.toBean(json, RedisData.class);
         R r = JSONUtil.toBean((JSONObject) redisData.getData(), type);
+        //2.判断是否存在
+        if (!StrUtil.isBlank(json)) {
+            //3.存在，直接返回
+            return r;
+        }
+        //4.命中，需要先把json反序列化为对象
         LocalDateTime expireTime = redisData.getExpireTime();
         //5.判断是否过期
         //过期时间是否在当前时间之后

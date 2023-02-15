@@ -55,16 +55,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 //                },CACHE_SHOP_TTL,TimeUnit.MINUTES);
 
            //互斥锁解决缓存击穿
-//        Shop shop = cacheClient.queryWithMutex(
-//                CACHE_SHOP_KEY, id, Shop.class, new Function<Long, Shop>() {
-//                    @Override
-//                    public Shop apply(Long aLong) {
-//                        return getById(aLong);
-//                    }
-//                },CACHE_SHOP_TTL,TimeUnit.MINUTES);
-
-//        //逻辑过期解决缓存击穿
-        Shop shop = cacheClient.queryWithLogicalExpire(
+        Shop shop = cacheClient.queryWithMutex(
                 CACHE_SHOP_KEY, id, Shop.class, new Function<Long, Shop>() {
                     @Override
                     public Shop apply(Long aLong) {
@@ -72,6 +63,14 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
                     }
                 },CACHE_SHOP_TTL,TimeUnit.MINUTES);
 
+/*//        //逻辑过期解决缓存击穿
+        Shop shop = cacheClient.queryWithLogicalExpire(
+                CACHE_SHOP_KEY, id, Shop.class, new Function<Long, Shop>() {
+                    @Override
+                    public Shop apply(Long aLong) {
+                        return getById(aLong);
+                    }
+                },CACHE_SHOP_TTL,TimeUnit.MINUTES);*/
 
 
         if (shop == null) {
